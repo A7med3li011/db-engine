@@ -1,11 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Param,
-  Post,
-  ValidationPipe,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Param, Post } from '@nestjs/common';
 import { DatabaseService } from './database.service';
 import { CreateDatabaseDto } from './dtos/create-database.dto';
 
@@ -23,6 +16,7 @@ export class DatabaseController {
   async connectDatabase(@Param('name') name: string) {
     await this.databaseService.connect(name);
   }
+
   @Delete(':name')
   async dropDatabase(@Param('name') name: string) {
     await this.databaseService.drop(name);

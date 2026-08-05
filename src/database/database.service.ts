@@ -3,14 +3,18 @@ import * as path from 'path';
 
 import { DatabaseMetadata } from './interfaces/database.metadata.interface';
 import { StorageService } from '../storage/storage.service';
+import { PathService } from 'src/shared/path.service';
 
 @Injectable()
 export class DatabaseService {
   private currentDatabase: string | null = null;
-  constructor(private readonly storageService: StorageService) {}
+  constructor(
+    private readonly storageService: StorageService,
+    private readonly pathService: PathService,
+  ) {}
 
   private getDatabasePath(name: string) {
-    return path.join(process.cwd(), 'databases', name);
+    return this.pathService.getDatabasePath(name);
   }
 
   private async createMetaData(name: string, dataBasePath: string) {

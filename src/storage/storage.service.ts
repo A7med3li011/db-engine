@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import {
   access,
   writeFile,
@@ -17,6 +17,9 @@ export class StorageService {
 
   async writeFile(filePath: string, data: string): Promise<void> {
     await writeFile(filePath, data, 'utf-8');
+  }
+  async writeJson(filePath: string, data: unknown): Promise<void> {
+    await writeFile(filePath, JSON.stringify(data), 'utf-8');
   }
 
   async exists(path: string): Promise<boolean> {
@@ -39,9 +42,20 @@ export class StorageService {
   }: AppendFileOptions): Promise<void> {
     await fsAppendFile(path, content, encoding);
   }
-  
-  async readFile(options: { path: string; encoding?: BufferEncoding }) {
-    const content = await readFile(options.path, options.encoding);
-    return content;
+
+  async readFile(options: {
+    path: string;
+    encoding?: BufferEncoding;
+  }): Promise<string> {
+    return await readFile(options.path, options.encoding ?? 'utf-8');
+  }
+  async createFile(path: string): Promise<void> {
+    if (await this.exists(path)) {
+      throw new HttpException('File already exists.', 409);
+    }
+    await this.writeFile(path, '');
+  }
+  async deleteFile(path: string): Promise<void> {
+    await rm(path, { force: true });
   }
 }

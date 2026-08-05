@@ -1,0 +1,1 @@
+{"name":"user","columns":[{"name":"id","type":"number","primaryKey":true},{"name":"name","type":"string"},{"name":"isActive","type":"boolean"},{"name":"age","type":"number","unique":true},{"name":"phone","type":"string","unique":true},{"name":"isBlocked","type":"boolean","default":false}]}
