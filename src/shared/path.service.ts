@@ -14,6 +14,6 @@ export class PathService {
     return path.join(this.getDatabasePath(databaseName), `${table}.schema.json`);
   }
   getTablePath(databaseName: string, tableName: string): string {
-    return path.join(this.getDatabasePath(databaseName), `${tableName}.ndjson`);
+    return path.join(this.getDatabasePath(databaseName), `${tableName}.data`);
   }
 }

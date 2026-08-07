@@ -2,13 +2,15 @@ import {
   Allow,
   IsBoolean,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   Length,
+  Min,
 } from 'class-validator';
-import type { ColumnType } from '../interfaces/table-schema.interface';
+import { ColumnType } from '../interfaces/table-schema.interface';
 
-const COLUMN_TYPES: ColumnType[] = ['number', 'string', 'boolean'];
+const COLUMN_TYPES: string[] = Object.values(ColumnType);
 
 export class CreateColumnDto {
   @IsString()
@@ -36,4 +38,10 @@ export class CreateColumnDto {
 
   @Allow()
   default?: any;
+
+  
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  length?: number;
 }

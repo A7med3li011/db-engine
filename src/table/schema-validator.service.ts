@@ -1,5 +1,5 @@
 import { HttpException, Injectable } from '@nestjs/common';
-import { TableSchema } from './interfaces/table-schema.interface';
+import { ColumnType, TableSchema } from './interfaces/table-schema.interface';
 
 @Injectable()
 export class SchemaValidatoreService {
@@ -39,11 +39,14 @@ export class SchemaValidatoreService {
     }
   }
   private validateTypes(schema: TableSchema) {
-    const allowed = new Set(['number', 'string', 'boolean']);
+    const allowed = new Set<string>(Object.values(ColumnType));
 
     for (const column of schema.columns) {
       if (!allowed.has(column.type)) {
-        throw new HttpException(`Unsupported type "${column.type}".`, 400);
+        throw new HttpException(
+          `Unsupported type "${column.type}". Allowed types: ${[...allowed].join(', ')}.`,
+          400,
+        );
       }
     }
   }

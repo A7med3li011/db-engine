@@ -1,1 +1,1 @@
-{"name":"user","columns":[{"name":"id","type":"number","primaryKey":true},{"name":"name","type":"string"},{"name":"isActive","type":"boolean"},{"name":"age","type":"number","unique":true},{"name":"phone","type":"string","unique":true},{"name":"isBlocked","type":"boolean","default":false}]}
+{"name":"user","columns":[{"name":"id","type":"INTEGER","primaryKey":true},{"name":"name","type":"VARCHAR","length":6},{"name":"isActive","type":"BOOLEAN"}]}
