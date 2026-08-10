@@ -1,13 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Param, Patch, Post } from '@nestjs/common';
 import { TableService } from './table.service';
 
 @Controller('table')
@@ -27,15 +18,16 @@ export class TableController {
     await this.tableService.insert(tableName, row);
   }
 
-  @Get('/select/:tableName')
+  @Post('/select/:tableName')
   async selectRows(
     @Param('tableName') tableName: string,
-    @Query() where: Record<string, unknown>,
+    @Body() where: Record<string, unknown>,
   ) {
+    // return { data: await this.tableService.select(tableName, where) };
     return { data: await this.tableService.select(tableName, where) };
   }
 
-  @Patch('/update/:tableName')
+  @Patch('/:tableName')
   async updateRows(
     @Param('tableName') tableName: string,
     @Body()

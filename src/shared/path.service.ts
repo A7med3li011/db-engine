@@ -11,9 +11,12 @@ export class PathService {
     return path.join(this.getDatabaseRoot(), databaseName);
   }
   getSchemaPath(databaseName: string, table: string): string {
-    return path.join(this.getDatabasePath(databaseName), `${table}.schema.json`);
+    return path.join(
+      this.getDatabasePath(databaseName),
+      `${table}.schema.json`,
+    );
   }
   getTablePath(databaseName: string, tableName: string): string {
-    return path.join(this.getDatabasePath(databaseName), `${tableName}.data`);
+    return path.join(this.getDatabasePath(databaseName), `${tableName}.csv`);
   }
 }

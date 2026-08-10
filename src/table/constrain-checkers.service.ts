@@ -24,6 +24,7 @@ export class ConstrainCheckerService {
   ): void {
     const primaryKey = schema.columns.find((el) => el.primaryKey)?.name;
     if (!primaryKey) return;
+
     if (row[primaryKey] == null || row[primaryKey] == undefined)
       throw new HttpException("primary key can't be nullable", 400);
 
@@ -52,7 +53,9 @@ export class ConstrainCheckerService {
 
     for (const key of uniquenessKeys) {
       if (
-        allRows.some((ele,index) => ele[key] === row[key] && index != ignoredIndex)
+        allRows.some(
+          (ele, index) => ele[key] === row[key] && index != ignoredIndex,
+        )
       ) {
         throw new HttpException(`key:${key} is duplicated must be unique`, 409);
       }

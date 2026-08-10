@@ -51,11 +51,11 @@ export class StorageService {
   }): Promise<string> {
     return await readFile(options.path, options.encoding ?? 'utf-8');
   }
-  async createFile(path: string): Promise<void> {
+  async createFile(path: string, payload?: string): Promise<void> {
     if (await this.exists(path)) {
       throw new HttpException('File already exists.', 409);
     }
-    await this.writeFile(path, '');
+    await this.writeFile(path, payload ? payload : '');
   }
   async deleteFile(path: string): Promise<void> {
     await rm(path, { force: true });
@@ -86,5 +86,9 @@ export class StorageService {
   async fileSize(path: string): Promise<number> {
     const info = await stat(path);
     return info.size;
+  }
+
+  async readBuffer(path: string): Promise<Buffer> {
+    return readFile(path);
   }
 }
