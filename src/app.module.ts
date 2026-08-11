@@ -7,6 +7,8 @@ import { TableModule } from './table/table.module';
 import { SharedModule } from './shared/shared.module';
 import { StorageEngineModule } from './storage-engine/storage-engine.module';
 import { ParserModule } from './parser/parser.module';
+import { ExecutorModule } from './executor/executor.module';
+import { SqlizerModule } from './sqlizer/sqlizer.module';
 
 @Module({
   imports: [
@@ -16,6 +18,8 @@ import { ParserModule } from './parser/parser.module';
     SharedModule,
     StorageEngineModule,
     ParserModule,
+    ExecutorModule,
+    SqlizerModule
   ],
   controllers: [AppController],
   providers: [AppService],

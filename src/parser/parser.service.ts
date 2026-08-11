@@ -1,58 +1,58 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { Token, TokenType } from './tokenizer/token.interface';
 import { Row } from 'src/table/interfaces/table-schema.interface';
+import { ExecutorService } from 'src/executor/executor.service';
 
 @Injectable()
 export class ParserService {
+  constructor(private readonly executorService: ExecutorService) {}
   parse(tokens: Token[]) {
     const firstToken = tokens[0];
-    console.log(firstToken);
-    console.log(tokens);
 
-    let obj: any = {};
+    if (!firstToken || firstToken.type === TokenType.EOF) {
+      throw new HttpException('Empty statement', 400);
+    }
 
-    if (firstToken.value.toUpperCase() === 'SELECT') {
+    const firstTokenValue = firstToken.value.toUpperCase();
+    const secondTokenValue = tokens[1]?.value?.toUpperCase() ?? '';
+    let obj: any = null;
+
+    if (firstTokenValue === 'SELECT') {
       obj = this.parseSelect(tokens);
     }
 
-    if (firstToken.value.toUpperCase() === 'INSERT') {
+    if (firstTokenValue === 'INSERT') {
       obj = this.parseInsert(tokens);
     }
 
-    if (firstToken.value.toUpperCase() === 'UPDATE') {
+    if (firstTokenValue === 'UPDATE') {
       obj = this.parseUpdate(tokens);
     }
 
-    if (firstToken.value.toUpperCase() === 'DELETE') {
+    if (firstTokenValue === 'DELETE') {
       obj = this.parseDelete(tokens);
     }
 
-    if (
-      firstToken.value.toUpperCase() === 'CREATE' &&
-      tokens[1].value.toUpperCase() === 'DATABASE'
-    ) {
+    if (firstTokenValue === 'CREATE' && secondTokenValue === 'DATABASE') {
       obj = this.ParseCreateDB(tokens);
     }
-    if (
-      firstToken.value.toUpperCase() === 'CREATE' &&
-      tokens[1].value.toUpperCase() === 'TABLE'
-    ) {
+    if (firstTokenValue === 'CREATE' && secondTokenValue === 'TABLE') {
       obj = this.ParseCreateTable(tokens);
     }
-    if (
-      firstToken.value.toUpperCase() === 'DROP' &&
-      tokens[1].value.toUpperCase() === 'DATABASE'
-    ) {
+    if (firstTokenValue === 'DROP' && secondTokenValue === 'DATABASE') {
       obj = this.ParseDropDatabase(tokens);
     }
-    if (
-      firstToken.value.toUpperCase() === 'DROP' &&
-      tokens[1].value.toUpperCase() === 'TABLE'
-    ) {
+    if (firstTokenValue === 'DROP' && secondTokenValue === 'TABLE') {
       obj = this.ParseDropTable(tokens);
     }
-    console.log(obj);
-    // throw new HttpException(`Unexpected token "${firstToken.value}"`, 400);
+
+    if (obj === null) {
+      throw new HttpException(`Unexpected token "${firstToken.value}"`, 400);
+    }
+
+    // Single dispatch point: whatever the executor returns becomes the HTTP
+    // response body, so keep returning it from here.
+    return this.executorService.executeDDL(obj);
   }
   private parseSelect(tokens: Token[]) {
     let position = 0;
@@ -281,15 +281,7 @@ export class ParserService {
       where,
     };
   }
-  // insert into user (name , age) values (ahmed,4)
-  /*
-    {
-      type: 'INSERT',
-      table: 'users',
-      columns: ['name', 'age'],
-      values: ['Ahmed', 25],
-    }
-    */
+
   private parseInsert(tokens: Token[]) {
     let position = 0;
 

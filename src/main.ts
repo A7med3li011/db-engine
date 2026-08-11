@@ -21,13 +21,13 @@ async function bootstrap() {
   await app.listen(process.env.PORT ?? 3000);
 }
 
-const res = tokenize(`CREATE TABLE users 
-  ,
-  id INTEGER,
-  name INTEGER,
-  age INTEGER defauLt 20,
-);`);
+// const res = tokenize(`CREATE TABLE users
+//   ,
+//   id INTEGER,
+//   name INTEGER,
+//   age INTEGER defauLt 20,
+// );`);
 
-parse(res);
+// parse(res);
 
 bootstrap();

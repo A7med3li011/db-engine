@@ -1,21 +1,13 @@
 import { HttpException, Injectable } from '@nestjs/common';
-import { DatabaseService } from 'src/database/database.service';
-import { PathService } from 'src/shared/path.service';
-import { StorageService } from 'src/storage/storage.service';
 import { SchemaValidatoreService } from './schema-validator.service';
 import { Row, TableSchema } from './interfaces/table-schema.interface';
 import { RowValidatoreService } from './row-validator.service';
 import { StorageEngineService } from 'src/storage-engine/storage-engine.service';
 import { ConstrainCheckerService } from './constrain-checkers.service';
-import { encodeHeader } from 'src/storage-engine/csv/csv-codec';
-import { LINE_BREAK } from 'src/storage-engine/csv/csv-constants';
 
 @Injectable()
 export class TableService {
   constructor(
-    private readonly databaseService: DatabaseService,
-    private readonly storageService: StorageService,
-    private readonly pathService: PathService,
     private readonly SchemaValidatoreService: SchemaValidatoreService,
     private readonly storageEngineService: StorageEngineService,
     private readonly RowValidatoreService: RowValidatoreService,
@@ -23,29 +15,9 @@ export class TableService {
   ) {}
 
   async create(dto: TableSchema): Promise<void> {
-    const db = this.databaseService.requireCurrentDatabase();
-
     this.SchemaValidatoreService.validate(dto);
 
-    const dataPath = this.pathService.getTablePath(db, dto.name);
-
-    if (await this.storageService.exists(dataPath)) {
-      throw new HttpException(`Table ${dto.name} already exists`, 409);
-    }
-
-    const header = encodeHeader(dto);
-
-    try {
-      await this.storageService.createFile(dataPath, `${header}${LINE_BREAK}`);
-
-      const schemaPath = this.pathService.getSchemaPath(db, dto.name);
-
-      await this.storageService.writeJson(schemaPath, dto);
-    } catch {
-      await this.storageService.deleteFile(dataPath);
-
-      throw new HttpException(`Failed to create table ${dto.name}`, 500);
-    }
+    await this.storageEngineService.createTable(dto);
   }
 
   async insert(tableName: string, row: Row): Promise<void> {

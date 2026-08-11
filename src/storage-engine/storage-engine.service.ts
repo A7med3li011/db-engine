@@ -10,7 +10,12 @@ import {
   LIVE_FLAG,
   WASTED_FLAG,
 } from './csv/csv-constants';
-import { decodeRow, splitFields, encodeRow } from './csv/csv-codec';
+import {
+  decodeRow,
+  splitFields,
+  encodeRow,
+  encodeHeader,
+} from './csv/csv-codec';
 import { StoredRow } from './csv/stored-row-interface';
 
 @Injectable()
@@ -73,6 +78,30 @@ export class StorageEngineService {
     }
 
     return withOffset ? rows : rows.map((ele) => ele?.row);
+  }
+
+  async createTable(dto: TableSchema) {
+    const db = this.databaseService.requireCurrentDatabase();
+
+    const dataPath = this.pathService.getTablePath(db, dto.name);
+
+    if (await this.storageService.exists(dataPath)) {
+      throw new HttpException(`Table ${dto.name} already exists`, 409);
+    }
+
+    const header = encodeHeader(dto);
+
+    try {
+      await this.storageService.createFile(dataPath, `${header}${LINE_BREAK}`);
+
+      const schemaPath = this.pathService.getSchemaPath(db, dto.name);
+
+      await this.storageService.writeJson(schemaPath, dto);
+    } catch {
+      await this.storageService.deleteFile(dataPath);
+
+      throw new HttpException(`Failed to create table ${dto.name}`, 500);
+    }
   }
 
   async insertRow(tableName: string, row: Row): Promise<void> {
