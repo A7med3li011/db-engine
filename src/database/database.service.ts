@@ -54,7 +54,7 @@ export class DatabaseService {
 
     return this.currentDatabase;
   }
-  private getCurrentDatabase(): string | null {
+  getCurrentDatabase(): string | null {
     return this.currentDatabase;
   }
 

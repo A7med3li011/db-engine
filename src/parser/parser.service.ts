@@ -49,9 +49,7 @@ export class ParserService {
     if (obj === null) {
       throw new HttpException(`Unexpected token "${firstToken.value}"`, 400);
     }
-
-    // Single dispatch point: whatever the executor returns becomes the HTTP
-    // response body, so keep returning it from here.
+    console.log(tokens, 'from parser');
     return this.executorService.executeDDL(obj);
   }
   private parseSelect(tokens: Token[]) {
@@ -358,7 +356,7 @@ export class ParserService {
     }
 
     position++;
-    const values: string[] = [];
+    const values: (string | number | boolean | null)[] = [];
     while (true) {
       console.log(tokens[position], position);
       if (
@@ -373,8 +371,18 @@ export class ParserService {
         console.log(tokens[position].value, tokens[position].type);
         throw new HttpException(`Expected column value`, 400);
       }
-
-      values.push(tokens[position].value);
+      console.log(typeof tokens[position].value, 'vv');
+      if (tokens[position].type == TokenType.NUMBER) {
+        values.push(Number(tokens[position].value));
+      } else if (
+        tokens[position].type == TokenType.KEYWORD &&
+        (tokens[position].value == 'true' || tokens[position].value == 'false')
+      ) {
+        const v = tokens[position].value === 'true' ? true : false;
+        values.push(v);
+      } else {
+        values.push(tokens[position].value);
+      }
       position++;
 
       if (

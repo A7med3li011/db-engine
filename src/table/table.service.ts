@@ -1,8 +1,13 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { SchemaValidatoreService } from './schema-validator.service';
-import { Row, TableSchema } from './interfaces/table-schema.interface';
+import {
+  Row,
+  TableSchema,
+  WhereClause,
+} from './interfaces/table-schema.interface';
 import { RowValidatoreService } from './row-validator.service';
 import { StorageEngineService } from 'src/storage-engine/storage-engine.service';
+import { StoredRow } from 'src/storage-engine/csv/stored-row-interface';
 import { ConstrainCheckerService } from './constrain-checkers.service';
 
 @Injectable()
@@ -20,10 +25,17 @@ export class TableService {
     await this.storageEngineService.createTable(dto);
   }
 
-  async insert(tableName: string, row: Row): Promise<void> {
+  async insert(
+    tableName: string,
+    columns: string[],
+    values: string[],
+  ): Promise<void> {
     const schema = await this.storageEngineService.readSchema(tableName);
     const allRows = await this.storageEngineService.readAllRows(tableName);
-
+    const row = {};
+    columns.forEach((el, index) => {
+      row[el] = values[index];
+    });
     this.ConstrainCheckerService.validate(row, allRows, schema);
     this.RowValidatoreService.validate(row, schema);
 
@@ -32,23 +44,28 @@ export class TableService {
 
   async select(
     tableName: string,
-    where: Record<string, unknown> = {},
+    projection: string[] | undefined,
+    where: WhereClause | undefined,
   ): Promise<Row[]> {
-    const rows = await this.storageEngineService.select(tableName, where);
+    const rows = await this.storageEngineService.select(
+      tableName,
+      projection,
+      where,
+    );
 
     return rows;
   }
 
   async update(
     tableName: string,
-    where: Record<string, unknown>,
+    where: WhereClause | null | undefined,
     updates: Record<string, unknown>,
   ): Promise<void> {
     if (Object.keys(updates).length === 0) {
       throw new HttpException('There are no values for updates', 400);
     }
 
-    if (Object.keys(where).length === 0) {
+    if (!where || Object.keys(where).length === 0) {
       throw new HttpException('There are no conditions for update', 400);
     }
 
@@ -58,23 +75,24 @@ export class TableService {
       true,
     );
 
-    const targets = this.storageEngineService.matchRows(storedRows, where);
+    const targets: StoredRow[] = [];
+    const changedIndexes: number[] = [];
+
+    storedRows.forEach((entry, index) => {
+      if (this.rowChecker(entry.row, where)) {
+        targets.push(entry);
+        changedIndexes.push(index);
+      }
+    });
 
     if (targets.length === 0) {
       throw new HttpException('There are no matched rows for update', 404);
     }
 
-    // Validate against the table as it will look *after* the update, so that
-    // rows changed by this same statement collide with each other instead of
-    // passing against a stale snapshot.
-    const projected = storedRows.map((entry) => entry.row);
-    const changedIndexes: number[] = [];
+    const projected: Row[] = storedRows.map((entry) => entry.row);
 
-    for (const target of targets) {
-      const index = storedRows.indexOf(target);
-
-      projected[index] = { ...target.row, ...updates };
-      changedIndexes.push(index);
+    for (const index of changedIndexes) {
+      projected[index] = { ...projected[index], ...updates };
     }
 
     for (const index of changedIndexes) {
@@ -94,12 +112,36 @@ export class TableService {
       changedIndexes.map((index) => projected[index]),
     );
   }
-  async delete(
-    tableName: string,
-    where: Record<string, unknown>,
-  ): Promise<void> {
+  async delete(tableName: string, where: WhereClause | null): Promise<void> {
     await this.storageEngineService.deleteRow(tableName, where);
   }
 
-  drop(): void {}
+  async drop(tableName: string | undefined): Promise<void> {
+    if (!tableName) throw new HttpException('table name is required', 400);
+    await this.storageEngineService.dropTable(tableName);
+  }
+
+  private rowChecker(row: Row, where: WhereClause): boolean {
+    const { column, operator, value } = where;
+
+    switch (operator) {
+      case '>':
+        return Number(row[column]) > Number(value);
+
+      case '<':
+        return Number(row[column]) < Number(value);
+      case '>=':
+        return Number(row[column]) >= Number(value);
+      case '<=':
+        return Number(row[column]) <= Number(value);
+
+      case '=':
+        return row[column] == value;
+      case '<>':
+      case '!=':
+        return row[column] != value;
+      default:
+        throw new HttpException(`Unsupported operator "${operator}"`, 400);
+    }
+  }
 }

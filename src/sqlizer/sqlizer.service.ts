@@ -8,6 +8,7 @@ export class SqlizerService {
 
   sqlize(statement: string) {
     const tokens = tokenize(statement);
+    console.log(tokens);
 
     if (!tokens.length) {
       throw new HttpException("statement can't be empty", 400);

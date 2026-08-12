@@ -2,7 +2,11 @@ import { HttpException, Injectable } from '@nestjs/common';
 import { DatabaseService } from 'src/database/database.service';
 import { PathService } from 'src/shared/path.service';
 import { StorageService } from 'src/storage/storage.service';
-import { Row, TableSchema } from 'src/table/interfaces/table-schema.interface';
+import {
+  Row,
+  TableSchema,
+  WhereClause,
+} from 'src/table/interfaces/table-schema.interface';
 import {
   DELIMITER,
   FLAG_WIDTH,
@@ -114,16 +118,21 @@ export class StorageEngineService {
   }
   async deleteRow(
     tableName: string,
-    condition: Record<string, unknown>,
+    condition: {
+      column: string;
+      operator: string;
+      value: string | number | boolean;
+    } | null,
   ): Promise<void> {
-    const keys = Object.keys(condition);
-
-    if (keys.length === 0) {
-      throw new HttpException('Delete requires a condition', 400);
-    }
-
     const rows = await this.readAllRows(tableName, true);
-    const targets = this.matchRows(rows, condition);
+
+    const targets: StoredRow[] = [];
+    rows.forEach((entry) => {
+      if (!condition) return;
+      if (this.rowChecker(entry.row, condition)) {
+        targets.push(entry);
+      }
+    });
 
     if (targets.length === 0) {
       throw new HttpException('Row not found', 404);
@@ -176,8 +185,8 @@ export class StorageEngineService {
 
   async select(
     tableName: string,
-
-    conditions: Record<string, unknown>,
+    projection: string[] | undefined,
+    where?: WhereClause,
   ): Promise<Row[]> {
     const db = this.databaseService.requireCurrentDatabase();
     const tablePath = this.pathService.getTablePath(db, tableName);
@@ -189,7 +198,7 @@ export class StorageEngineService {
 
     const lines = content.split(LINE_BREAK);
 
-    let rows: Row[] = [];
+    const rows: Row[] = [];
 
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i];
@@ -199,16 +208,34 @@ export class StorageEngineService {
       const fields = splitFields(line);
 
       if (fields[0] === WASTED_FLAG) continue;
+      const row = decodeRow(fields.slice(1).join(DELIMITER), schema);
+      console.log(where);
 
-      rows.push(decodeRow(fields.slice(1).join(DELIMITER), schema));
-    }
-    const keys = Object.keys(conditions);
+      if (where) {
+        const flag: any = this.rowChecker(row, where);
+        if (flag === true) {
+          const projectedRow = projection?.length
+            ? this.projectionMethod(row, projection)
+            : row;
+          rows.push(projectedRow);
+          continue;
+        } else {
+          continue;
+        }
+      }
 
-    if (keys.length) {
-      rows = rows.filter((entry) =>
-        keys.every((key) => String(entry[key]) === String(conditions[key])),
-      );
+      const projectedRow = projection?.length
+        ? this.projectionMethod(row, projection)
+        : row;
+      rows.push(projectedRow);
     }
+    // const keys = Object.keys(conditions);
+
+    // if (keys.length) {
+    //   rows = rows.filter((entry) =>
+    //     keys.every((key) => String(entry[key]) === String(conditions[key])),
+    //   );
+    // }
     return rows;
   }
 
@@ -221,5 +248,71 @@ export class StorageEngineService {
     }
 
     return dataPath;
+  }
+  private rowChecker(
+    row: Row,
+    where: {
+      column: string;
+      operator: string;
+      value: string | number | boolean;
+    },
+  ) {
+    const { column, operator, value } = where;
+
+    switch (operator) {
+      case '>':
+        return Number(row[column]) > Number(value);
+
+      case '<':
+        return Number(row[column]) < Number(value);
+      case '>=':
+        return Number(row[column]) >= Number(value);
+      case '<=':
+        return Number(row[column]) <= Number(value);
+
+      case '=':
+        return row[column] == value;
+      case '<>':
+      case '!=':
+        return row[column] != value;
+    }
+  }
+  private projectionMethod(row: Row, projection: string[]) {
+    if (projection?.length && !projection.includes('*')) {
+      const newObj = {};
+      for (const [key, value] of Object.entries(row)) {
+        if (!projection.includes(key)) continue;
+        newObj[key] = value;
+      }
+      return newObj;
+    }
+    return row;
+  }
+
+  async dropTable(tableName: string) {
+    const db = this.databaseService.requireCurrentDatabase();
+    const tablePath = this.pathService.getTablePath(db, tableName);
+    if (!(await this.storageService.exists(tablePath))) {
+      throw new HttpException('table not found', 404);
+    }
+    const schemaPath = this.pathService.getSchemaPath(db, tableName);
+
+    await Promise.all([
+      this.storageService.deleteFile(tablePath),
+      this.storageService.deleteFile(schemaPath),
+    ]);
+  }
+
+  async dropDatabase(databaseName: string) {
+    const dbPath = this.pathService.getDatabasePath(databaseName);
+    if (!(await this.storageService.exists(dbPath)))
+      throw new HttpException(`Database ${databaseName} does not exist`, 404);
+
+    if (databaseName === this.databaseService.getCurrentDatabase())
+      throw new HttpException(
+        'Cannot drop the currently connected database.',
+        400,
+      );
+    await this.storageService.deleteDirectory(dbPath);
   }
 }

@@ -57,6 +57,7 @@ export class RowValidatoreService {
 
       case ColumnType.VARCHAR:
         if (typeof value !== 'string') {
+          console.log(value, 'value', typeof value);
           throw new HttpException(
             `Column "${column.name}" must be a VARCHAR.`,
             400,

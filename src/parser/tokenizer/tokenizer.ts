@@ -207,6 +207,7 @@ export function tokenize(sql: string): Token[] {
 }
 
 export function parse(tokens: Token[]) {
+  
   const firstToken = tokens[0];
   console.log(firstToken);
   console.log(tokens);

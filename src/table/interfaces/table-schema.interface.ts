@@ -22,3 +22,9 @@ export interface TableSchema {
 }
 
 export type Row = Record<string, unknown>;
+
+export interface WhereClause {
+  column: string;
+  operator: string;
+  value: string | number | boolean;
+}
