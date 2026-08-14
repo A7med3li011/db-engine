@@ -2,26 +2,23 @@ import { HttpException, Injectable } from '@nestjs/common';
 import { SchemaValidatoreService } from './schema-validator.service';
 import {
   Row,
+  SerialCounter,
   TableSchema,
   WhereClause,
 } from './interfaces/table-schema.interface';
-import { RowValidatoreService } from './row-validator.service';
 import { StorageEngineService } from 'src/storage-engine/storage-engine.service';
 import { StoredRow } from 'src/storage-engine/csv/stored-row-interface';
-import { ConstrainCheckerService } from './constrain-checkers.service';
-
+import { ValidationService } from './validation.service';
 @Injectable()
 export class TableService {
   constructor(
     private readonly SchemaValidatoreService: SchemaValidatoreService,
     private readonly storageEngineService: StorageEngineService,
-    private readonly RowValidatoreService: RowValidatoreService,
-    private readonly ConstrainCheckerService: ConstrainCheckerService,
+    private readonly validateService: ValidationService,
   ) {}
 
   async create(dto: TableSchema): Promise<void> {
     this.SchemaValidatoreService.validate(dto);
-
     await this.storageEngineService.createTable(dto);
   }
 
@@ -31,13 +28,37 @@ export class TableService {
     values: string[],
   ): Promise<void> {
     const schema = await this.storageEngineService.readSchema(tableName);
-    const allRows = await this.storageEngineService.readAllRows(tableName);
+    const incrementalCols = schema.columns.filter((el) => el.autoIncrement);
     const row = {};
     columns.forEach((el, index) => {
       row[el] = values[index];
     });
-    this.ConstrainCheckerService.validate(row, allRows, schema);
-    this.RowValidatoreService.validate(row, schema);
+
+    const readAllRows = async () => {
+      const storedRows = await this.storageEngineService.readAllRows(tableName);
+      return storedRows;
+    };
+    await this.validateService.validateRow(row, schema, readAllRows);
+
+    if (incrementalCols.length) {
+      const incrementalbase =
+        await this.storageEngineService.retrieveSerails(tableName);
+      console.log(incrementalbase, 'inc');
+      const updatedIncrementalfile: SerialCounter[] = [];
+      incrementalbase.forEach((el) => {
+        row[el.column] = Number(el.latest_value) + 1;
+        console.log(el.latest_value, 'here0');
+
+        el.latest_value += 1;
+        console.log(el.latest_value, 'here');
+        updatedIncrementalfile.push(el);
+      });
+      console.log(updatedIncrementalfile, 'zzzzzzzzzz');
+      await this.storageEngineService.incrementCurrentSerail(
+        tableName,
+        updatedIncrementalfile,
+      );
+    }
 
     await this.storageEngineService.insertRow(tableName, row);
   }
@@ -75,37 +96,65 @@ export class TableService {
       true,
     );
 
+    const colswithAutoIncremental = schema.columns
+      .filter((el) => el.autoIncrement)
+      .map((el) => el.name);
+
+    if (colswithAutoIncremental.length) {
+      colswithAutoIncremental.forEach((el) => {
+        if (updates[el] || updates[el] == 0 || updates[el] === null) {
+          throw new HttpException(
+            `you can not update ${el} it's a serial column`,
+            400,
+          );
+        }
+      });
+    }
     const targets: StoredRow[] = [];
     const changedIndexes: number[] = [];
+    const projected: Row[] = storedRows.map((entry) => entry.row);
+    let matched = 0;
 
     storedRows.forEach((entry, index) => {
-      if (this.rowChecker(entry.row, where)) {
-        targets.push(entry);
-        changedIndexes.push(index);
-      }
+      if (!this.rowChecker(entry.row, where)) return;
+      matched++;
+
+      const updatedRow = { ...entry.row, ...updates };
+      if (this.validateService.areEquality(entry.row, updatedRow)) return;
+
+      projected[index] = updatedRow;
+      targets.push(entry);
+      changedIndexes.push(index);
     });
 
-    if (targets.length === 0) {
+    if (matched === 0) {
       throw new HttpException('There are no matched rows for update', 404);
     }
 
-    const projected: Row[] = storedRows.map((entry) => entry.row);
+    if (changedIndexes.length === 0) return;
+
+    const loadRows = () => Promise.resolve(projected);
 
     for (const index of changedIndexes) {
-      projected[index] = { ...projected[index], ...updates };
-    }
-
-    for (const index of changedIndexes) {
-      this.ConstrainCheckerService.validate(
-        projected[index],
-        projected,
+      const abstractedProjected = { ...projected[index] };
+      await this.validateService.validateRow(
+        colswithAutoIncremental.length
+          ? this.abstractionFromAutoIncrementalKeys(
+              abstractedProjected,
+              colswithAutoIncremental,
+            )
+          : projected[index],
         schema,
+        loadRows,
         index,
       );
-      this.RowValidatoreService.validate(projected[index], schema);
     }
 
-    // Nothing is written until every merged row has passed validation.
+    console.log(
+      targets,
+      'ttttt',
+      changedIndexes.map((index) => projected[index]),
+    );
     await this.storageEngineService.applyUpdate(
       tableName,
       targets,
@@ -143,5 +192,9 @@ export class TableService {
       default:
         throw new HttpException(`Unsupported operator "${operator}"`, 400);
     }
+  }
+  private abstractionFromAutoIncrementalKeys(obj: Row, cols: string[]) {
+    cols.forEach((el) => delete obj[el]);
+    return obj;
   }
 }

@@ -1,0 +1,15 @@
+{
+  "name": "user",
+  "columns": [
+    { "name": "id", "type": "INTEGER", "nullable": false, "primaryKey": true },
+    {
+      "name": "phone",
+      "type": "VARCHAR",
+      "nullable": true,
+      "length": 20,
+      "unique": true
+    },
+    { "name": "age", "type": "VARCHAR", "nullable": false },
+    { "name": "name", "type": "VARCHAR", "nullable": true, "unique": true }
+  ]
+}

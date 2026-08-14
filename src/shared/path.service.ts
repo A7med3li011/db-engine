@@ -16,6 +16,12 @@ export class PathService {
       `${table}.schema.json`,
     );
   }
+  getIncrementalPath(databaseName: string, table: string): string {
+    return path.join(
+      this.getDatabasePath(databaseName),
+      `${table}.incremental.json`,
+    );
+  }
   getTablePath(databaseName: string, tableName: string): string {
     return path.join(this.getDatabasePath(databaseName), `${tableName}.csv`);
   }

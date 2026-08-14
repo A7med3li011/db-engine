@@ -11,7 +11,6 @@ export class ConstrainCheckerService {
     schema: TableSchema,
     ignoredIndex?: number,
   ): void {
-    this.fillDefault(row, schema);
     this.validatePrimaryKey(row, allRows, schema, ignoredIndex);
     this.validateuniqueness(row, allRows, schema, ignoredIndex);
   }
@@ -22,10 +21,11 @@ export class ConstrainCheckerService {
     schema: TableSchema,
     ignoredIndex?: number,
   ): void {
-    const primaryKey = schema.columns.find((el) => el.primaryKey)?.name;
+    const primaryRow = schema.columns.find((el) => el.primaryKey);
+    const primaryKey = primaryRow?.name;
     if (!primaryKey) return;
-
-    if (row[primaryKey] == null || row[primaryKey] == undefined)
+    if (primaryRow.autoIncrement) return;
+    if (row[primaryKey] == null)
       throw new HttpException("primary key can't be nullable", 400);
 
     if (
@@ -61,7 +61,7 @@ export class ConstrainCheckerService {
       }
     }
   }
-  private fillDefault(row: Row, schema: TableSchema): void {
+  applyDefaults(row: Row, schema: TableSchema): void {
     const defaultKeys = schema.columns.filter((el) => el.default != null);
 
     if (!defaultKeys.length) return;

@@ -13,13 +13,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
     const status = exception.getStatus();
-    console.log('Exceptionnnnnnnnnnnn', exception.getResponse());
 
     let message = exception.getResponse();
     if (typeof message === 'object' && message !== null) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       message = (message as any).message || exception.message;
     }
-    // console.log('Exception caught:', exception.message, 'Status:', status);
+
     response.status(status).json({
       message: message,
       statusCode: status,

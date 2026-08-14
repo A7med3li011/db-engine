@@ -26,4 +26,5 @@ export const KEYWORDS: ReadonlySet<string> = new Set([
   'KEY',
   'UNIQUE',
   'DEFAULT',
+  'SERIAL',
 ]);

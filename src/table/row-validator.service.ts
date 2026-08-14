@@ -19,7 +19,7 @@ export class RowValidatoreService {
   private validateRequiredColumns(row: Row, schema: TableSchema): void {
     for (const column of schema.columns) {
       if (!(column.name in row)) {
-        if (column.default != null) {
+        if (column.default != null || column.autoIncrement) {
           continue;
         }
         throw new HttpException(`Missing column "${column.name}".`, 400);
@@ -36,6 +36,7 @@ export class RowValidatoreService {
     }
   }
   private validateColumnType(column: ColumnDefinition, value: unknown): void {
+    if (column.autoIncrement) return;
     switch (column.type) {
       case ColumnType.INTEGER:
         if (!Number.isInteger(value)) {
@@ -57,7 +58,6 @@ export class RowValidatoreService {
 
       case ColumnType.VARCHAR:
         if (typeof value !== 'string') {
-          console.log(value, 'value', typeof value);
           throw new HttpException(
             `Column "${column.name}" must be a VARCHAR.`,
             400,

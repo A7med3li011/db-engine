@@ -1,13 +1,23 @@
 import { HttpException, Injectable } from '@nestjs/common';
-import { Token, TokenType } from './tokenizer/token.interface';
-import { Row } from 'src/table/interfaces/table-schema.interface';
-import { ExecutorService } from 'src/executor/executor.service';
 
+import {
+  ColumnDefinition,
+  ColumnType,
+} from 'src/table/interfaces/table-schema.interface';
+import { ExecutorService } from 'src/executor/executor.service';
+import { Token, TokenType } from 'src/tokenizer/token.interface';
+
+// the only words allowed as a column type. taken from ColumnType so the two
+// lists can never say different things.
+const COLUMN_TYPES: ReadonlySet<string> = new Set<string>(
+  Object.values(ColumnType),
+);
 @Injectable()
 export class ParserService {
   constructor(private readonly executorService: ExecutorService) {}
   parse(tokens: Token[]) {
     const firstToken = tokens[0];
+    console.log(tokens);
 
     if (!firstToken || firstToken.type === TokenType.EOF) {
       throw new HttpException('Empty statement', 400);
@@ -49,7 +59,7 @@ export class ParserService {
     if (obj === null) {
       throw new HttpException(`Unexpected token "${firstToken.value}"`, 400);
     }
-    console.log(tokens, 'from parser');
+
     return this.executorService.executeDDL(obj);
   }
   private parseSelect(tokens: Token[]) {
@@ -358,7 +368,6 @@ export class ParserService {
     position++;
     const values: (string | number | boolean | null)[] = [];
     while (true) {
-      console.log(tokens[position], position);
       if (
         tokens[position].type !== TokenType.IDENTIFIER &&
         tokens[position].type !== TokenType.NUMBER &&
@@ -368,10 +377,8 @@ export class ParserService {
         tokens[position].value.toUpperCase() != 'TRUE' &&
         tokens[position].value.toUpperCase() != 'FALSE'
       ) {
-        console.log(tokens[position].value, tokens[position].type);
         throw new HttpException(`Expected column value`, 400);
       }
-      console.log(typeof tokens[position].value, 'vv');
       if (tokens[position].type == TokenType.NUMBER) {
         values.push(Number(tokens[position].value));
       } else if (
@@ -596,52 +603,53 @@ export class ParserService {
       databaseName: tokens[position].value.toLowerCase(),
     };
   }
+  // CREATE TABLE product (id SERIAL PRIMARY KEY, title VARCHAR(50) NOT NULL)
   private ParseCreateTable(tokens: Token[]) {
     let position = 0;
     const obj: {
       type: string;
       tableName: string;
-      columns: any[];
+      columns: ColumnDefinition[];
     } = {
       type: 'CREATE',
       tableName: '',
       columns: [],
     };
 
-    if (
-      tokens[position].type !== TokenType.KEYWORD ||
-      tokens[position].value.toUpperCase() !== 'CREATE'
-    )
-      throw new HttpException("expected 'create' as keyword", 400);
+    const word = () => tokens[position].value.toUpperCase();
+    const found = () =>
+      tokens[position].type === TokenType.EOF
+        ? 'end of query'
+        : `"${tokens[position].value}"`;
+
+    if (tokens[position].type !== TokenType.KEYWORD || word() !== 'CREATE')
+      throw new HttpException("expected 'CREATE' as keyword", 400);
 
     position++;
 
-    if (
-      tokens[position].type !== TokenType.KEYWORD ||
-      tokens[position].value.toUpperCase() !== 'TABLE'
-    )
-      throw new HttpException("expected 'TABLE' as keyword after create", 400);
+    if (tokens[position].type !== TokenType.KEYWORD || word() !== 'TABLE')
+      throw new HttpException("expected 'TABLE' as keyword after CREATE", 400);
 
     position++;
 
     if (tokens[position].type !== TokenType.IDENTIFIER)
-      throw new HttpException('expected table name after Table', 400);
+      throw new HttpException('expected table name after TABLE', 400);
 
     obj.tableName = tokens[position].value;
     position++;
 
-    if (tokens[position].type !== TokenType.PUNCTUATION)
+    if (
+      tokens[position].type !== TokenType.PUNCTUATION ||
+      tokens[position].value !== '('
+    )
       throw new HttpException(
-        `expected  '(' as a symbol after ${obj.tableName}`,
+        `expected '(' after ${obj.tableName} but found ${found()}`,
         400,
       );
 
     position++;
-    let iteration = 0;
+
     while (true) {
-      console.log(iteration);
-      iteration++;
-      console.log(iteration, tokens[position].value, position);
       if (
         tokens[position].type === TokenType.PUNCTUATION &&
         tokens[position].value === ')'
@@ -649,89 +657,139 @@ export class ParserService {
         position++;
         break;
       }
-      if (
-        tokens[position].type === TokenType.PUNCTUATION &&
-        tokens[position].value === ','
-      ) {
+      if (obj.columns.length > 0) {
+        if (
+          tokens[position].type !== TokenType.PUNCTUATION ||
+          tokens[position].value !== ','
+        )
+          throw new HttpException(
+            `expected ',' or ')' but found ${found()}`,
+            400,
+          );
         position++;
-        continue;
       }
-      const row: Row = {};
-      row.nullable = true;
-      if (tokens[position].type !== TokenType.IDENTIFIER) {
-        throw new HttpException(`expected column name after '(' `, 400);
-      }
-      row.name = tokens[position].value;
+
+      if (tokens[position].type !== TokenType.IDENTIFIER)
+        throw new HttpException(
+          `expected a column name but found ${found()}`,
+          400,
+        );
+
+      const name = tokens[position].value;
       position++;
 
-      if (tokens[position].type !== TokenType.KEYWORD) {
-        throw new HttpException(`expected column type after his name  `, 400);
-      }
-      row.type = tokens[position].value;
-      position++;
       if (
-        tokens[position - 1].value.toUpperCase() === 'VARCHAR' &&
+        tokens[position].type !== TokenType.KEYWORD ||
+        !COLUMN_TYPES.has(word())
+      )
+        throw new HttpException(
+          `expected a type for column "${name}" but found ${found()}. allowed types: ${Object.values(
+            ColumnType,
+          ).join(', ')}`,
+          400,
+        );
+
+      const column: ColumnDefinition = {
+        name,
+        type: word() as ColumnType,
+        nullable: true,
+      };
+      position++;
+
+      if (column.type === ColumnType.SERIAL) {
+        column.type = ColumnType.INTEGER;
+        column.autoIncrement = true;
+        column.nullable = false;
+      }
+
+      if (
+        column.type === ColumnType.VARCHAR &&
         tokens[position].type === TokenType.PUNCTUATION &&
         tokens[position].value === '('
       ) {
         position++;
-        if (tokens[position].type !== TokenType.NUMBER) {
-          throw new HttpException(`expected number  after VARCHAR(  `, 400);
-        }
-        row.length = tokens[position].value;
-        position++;
-        if (
-          tokens[position].type !== TokenType.PUNCTUATION ||
-          tokens[position].value !== ')'
-        ) {
+
+        if (tokens[position].type !== TokenType.NUMBER)
           throw new HttpException(
-            `expected )  after VARCHAR(${row?.length as string}  `,
+            `expected a number inside VARCHAR( ) for column "${name}" but found ${found()}`,
             400,
           );
+
+        column.length = Number(tokens[position].value);
+        position++;
+
+        if (column.length <= 0)
+          throw new HttpException(
+            `VARCHAR size for column "${name}" must be bigger than 0`,
+            400,
+          );
+
+        if (tokens[position].value !== ')')
+          throw new HttpException(
+            `expected ')' after VARCHAR(${column.length} but found ${found()}`,
+            400,
+          );
+
+        position++;
+      }
+
+      while (tokens[position].type === TokenType.KEYWORD) {
+        if (word() === 'PRIMARY') {
+          position++;
+          if (word() !== 'KEY')
+            throw new HttpException(
+              `expected 'KEY' after 'PRIMARY' but found ${found()}`,
+              400,
+            );
+          position++;
+          column.primaryKey = true;
+          column.nullable = false;
+        } else if (word() === 'UNIQUE') {
+          position++;
+          column.unique = true;
+        } else if (word() === 'NOT') {
+          position++;
+          if (word() !== 'NULL')
+            throw new HttpException(
+              `expected 'NULL' after 'NOT' but found ${found()}`,
+              400,
+            );
+          position++;
+          column.nullable = false;
+        } else if (word() === 'DEFAULT') {
+          position++;
+          if (tokens[position].type === TokenType.NUMBER)
+            column.default = Number(tokens[position].value);
+          else if (tokens[position].type === TokenType.STRING)
+            column.default = tokens[position].value;
+          else if (word() === 'TRUE') column.default = true;
+          else if (word() === 'FALSE') column.default = false;
+          else if (word() === 'NULL') column.default = null;
+          else
+            throw new HttpException(
+              `bad DEFAULT value for column "${name}": ${found()}`,
+              400,
+            );
+          position++;
+        } else {
+          break;
         }
-        position++;
       }
 
-      if (
-        tokens[position].type === TokenType.KEYWORD &&
-        tokens[position].value.toUpperCase() === 'PRIMARY' &&
-        tokens[position + 1].type === TokenType.KEYWORD &&
-        tokens[position + 1].value.toUpperCase() === 'KEY'
-      ) {
-        row.primaryKey = true;
-        row.nullable = false;
-        position += 2;
-      }
-      if (
-        tokens[position].type === TokenType.KEYWORD &&
-        tokens[position].value.toUpperCase() === 'UNIQUE'
-      ) {
-        row.unique = true;
-        position++;
-      }
+      if (tokens[position].value !== ',' && tokens[position].value !== ')')
+        throw new HttpException(
+          `unexpected ${found()} after column "${name}"`,
+          400,
+        );
 
-      if (
-        tokens[position].type === TokenType.KEYWORD &&
-        tokens[position].value.toUpperCase() === 'NOT' &&
-        tokens[position + 1].type === TokenType.KEYWORD &&
-        tokens[position + 1].value.toUpperCase() === 'NULL'
-      ) {
-        row.nullable = false;
-        position += 2;
-      }
-      if (
-        tokens[position].type === TokenType.KEYWORD &&
-        tokens[position].value.toUpperCase() === 'DEFAULT' &&
-        (tokens[position + 1].type === TokenType.KEYWORD ||
-          tokens[position + 1].type === TokenType.NUMBER ||
-          tokens[position + 1].type === TokenType.STRING)
-      ) {
-        row.default = tokens[position + 1].value;
-        position += 2;
-      }
-
-      obj.columns.push(row);
+      obj.columns.push(column);
     }
+
+    if (obj.columns.filter((column) => column.primaryKey).length > 1)
+      throw new HttpException(
+        `table "${obj.tableName}" can have only one PRIMARY KEY`,
+        400,
+      );
 
     return obj;
   }

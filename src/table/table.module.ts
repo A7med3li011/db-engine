@@ -6,6 +6,7 @@ import { SchemaValidatoreService } from './schema-validator.service';
 import { RowValidatoreService } from './row-validator.service';
 import { StorageEngineModule } from 'src/storage-engine/storage-engine.module';
 import { ConstrainCheckerService } from './constrain-checkers.service';
+import { ValidationService } from './validation.service';
 
 @Module({
   imports: [SharedModule, StorageEngineModule],
@@ -14,6 +15,7 @@ import { ConstrainCheckerService } from './constrain-checkers.service';
     SchemaValidatoreService,
     RowValidatoreService,
     ConstrainCheckerService,
+    ValidationService,
   ],
   exports: [TableService],
 })

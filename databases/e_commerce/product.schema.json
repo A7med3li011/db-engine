@@ -1,0 +1,13 @@
+{
+  "name": "product",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "autoIncrement": true
+    },
+    { "name": "title", "type": "VARCHAR", "nullable": true, "length": 20 },
+    { "name": "price", "type": "INTEGER", "nullable": true }
+  ]
+}

@@ -1,5 +1,6 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { ColumnType, TableSchema } from './interfaces/table-schema.interface';
+import { isReserved } from './reserved-words';
 
 @Injectable()
 export class SchemaValidatoreService {
@@ -9,9 +10,10 @@ export class SchemaValidatoreService {
     this.validateColumnNames(schema);
     this.validateDuplicateColumns(schema);
     this.validateTypes(schema);
+    this.validateReservedNames(schema);
+    this.validateSerialColumns(schema);
   }
 
-  
   private validateTableName(schema: TableSchema): void {
     if (!schema.name.trim())
       throw new HttpException("Table name can't be emtpy", 400);
@@ -45,6 +47,37 @@ export class SchemaValidatoreService {
       if (!allowed.has(column.type)) {
         throw new HttpException(
           `Unsupported type "${column.type}". Allowed types: ${[...allowed].join(', ')}.`,
+          400,
+        );
+      }
+    }
+  }
+
+  private validateSerialColumns(schema: TableSchema): void {
+    for (const column of schema.columns) {
+      const isSerial = column.autoIncrement || column.type === ColumnType.SERIAL;
+
+      if (isSerial && column.default !== undefined) {
+        throw new HttpException(
+          `SERIAL column "${column.name}" cannot have a DEFAULT value, its value is generated automatically.`,
+          400,
+        );
+      }
+    }
+  }
+
+  private validateReservedNames(schema: TableSchema): void {
+    if (isReserved(schema.name)) {
+      throw new HttpException(
+        `"${schema.name}" is a reserved word and cannot be a table name.`,
+        400,
+      );
+    }
+
+    for (const column of schema.columns) {
+      if (isReserved(column.name)) {
+        throw new HttpException(
+          `"${column.name}" is a reserved word and cannot be a column name.`,
           400,
         );
       }

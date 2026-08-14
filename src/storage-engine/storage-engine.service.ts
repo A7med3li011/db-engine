@@ -4,6 +4,7 @@ import { PathService } from 'src/shared/path.service';
 import { StorageService } from 'src/storage/storage.service';
 import {
   Row,
+  SerialCounter,
   TableSchema,
   WhereClause,
 } from 'src/table/interfaces/table-schema.interface';
@@ -97,9 +98,35 @@ export class StorageEngineService {
 
     try {
       await this.storageService.createFile(dataPath, `${header}${LINE_BREAK}`);
-
+      /*{
+  name: 'product',
+  columns: [
+    {
+      name: 'id',
+      type: 'INTEGER',
+      nullable: false,
+      autoIncrement: true,
+      primaryKey: true
+    },
+    { name: 'title', type: 'VARCHAR', nullable: true, unique: true },
+    { name: 'category', type: 'VARCHAR', nullable: true },
+    { name: 'price', type: 'INTEGER', nullable: true }
+  ]
+} */
       const schemaPath = this.pathService.getSchemaPath(db, dto.name);
 
+      const autoIncColumn = dto.columns.filter((el) => el.autoIncrement);
+      if (autoIncColumn.length) {
+        const incrementalPath = this.pathService.getIncrementalPath(
+          db,
+          dto.name,
+        );
+        const arr: any[] = [];
+        autoIncColumn.forEach((el) => {
+          arr.push({ column: el.name, latest_value: 0 });
+        });
+        await this.storageService.writeJson(incrementalPath, arr);
+      }
       await this.storageService.writeJson(schemaPath, dto);
     } catch {
       await this.storageService.deleteFile(dataPath);
@@ -111,6 +138,7 @@ export class StorageEngineService {
   async insertRow(tableName: string, row: Row): Promise<void> {
     const dataPath = await this.requireDataPath(tableName);
     const schema = await this.readSchema(tableName);
+
     const encodedRowResult = encodeRow(row, schema);
 
     const newRow = `${LIVE_FLAG}${DELIMITER}${encodedRowResult}${LINE_BREAK}`;
@@ -209,7 +237,6 @@ export class StorageEngineService {
 
       if (fields[0] === WASTED_FLAG) continue;
       const row = decodeRow(fields.slice(1).join(DELIMITER), schema);
-      console.log(where);
 
       if (where) {
         const flag: any = this.rowChecker(row, where);
@@ -315,4 +342,26 @@ export class StorageEngineService {
       );
     await this.storageService.deleteDirectory(dbPath);
   }
+  async retrieveSerails(tableName: string): Promise<SerialCounter[]> {
+    const db = this.databaseService.requireCurrentDatabase();
+    const incrementalPath = this.pathService.getIncrementalPath(db, tableName);
+
+    if (!(await this.storageService.exists(incrementalPath))) return [];
+
+    const data = await this.storageService.readFile({ path: incrementalPath });
+
+    return JSON.parse(data) as SerialCounter[];
+  }
+  async incrementCurrentSerail(tableName: string, data: any): Promise<void> {
+    const db = this.databaseService.requireCurrentDatabase();
+    const incrementalPath = this.pathService.getIncrementalPath(db, tableName);
+
+    await this.storageService.writeFile(incrementalPath, JSON.stringify(data));
+  }
+  // async readIncrementalfile(databaseName: string, tableName) {
+  //   const path = this.pathService.getIncrementalPath(databaseName, tableName);
+  //   const res = await this.storageService.readFile({ path });
+
+  //   return res;
+  // }
 }
