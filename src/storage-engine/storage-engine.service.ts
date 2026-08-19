@@ -22,6 +22,8 @@ import {
   encodeHeader,
 } from './csv/csv-codec';
 import { StoredRow } from './csv/stored-row-interface';
+import { TableIndexService } from './index/table-index.service';
+import { KeyColumn } from './index/table-index.interface';
 
 @Injectable()
 export class StorageEngineService {
@@ -29,6 +31,7 @@ export class StorageEngineService {
     private readonly pathService: PathService,
     private readonly databaseService: DatabaseService,
     private readonly storageService: StorageService,
+    private readonly tableIndexService: TableIndexService,
   ) {}
 
   async readSchema(tableName: string): Promise<TableSchema> {
@@ -58,7 +61,7 @@ export class StorageEngineService {
     });
 
     const lines = content.split(LINE_BREAK);
-
+    console.log(lines);
     const rows: StoredRow[] = [];
 
     let offset = Buffer.byteLength(lines[0] + LINE_BREAK);
@@ -98,21 +101,7 @@ export class StorageEngineService {
 
     try {
       await this.storageService.createFile(dataPath, `${header}${LINE_BREAK}`);
-      /*{
-  name: 'product',
-  columns: [
-    {
-      name: 'id',
-      type: 'INTEGER',
-      nullable: false,
-      autoIncrement: true,
-      primaryKey: true
-    },
-    { name: 'title', type: 'VARCHAR', nullable: true, unique: true },
-    { name: 'category', type: 'VARCHAR', nullable: true },
-    { name: 'price', type: 'INTEGER', nullable: true }
-  ]
-} */
+
       const schemaPath = this.pathService.getSchemaPath(db, dto.name);
 
       const autoIncColumn = dto.columns.filter((el) => el.autoIncrement);
@@ -128,8 +117,10 @@ export class StorageEngineService {
         await this.storageService.writeJson(incrementalPath, arr);
       }
       await this.storageService.writeJson(schemaPath, dto);
+      await this.tableIndexService.create(dto);
     } catch {
       await this.storageService.deleteFile(dataPath);
+      await this.tableIndexService.drop(dto.name);
 
       throw new HttpException(`Failed to create table ${dto.name}`, 500);
     }
@@ -142,7 +133,17 @@ export class StorageEngineService {
     const encodedRowResult = encodeRow(row, schema);
 
     const newRow = `${LIVE_FLAG}${DELIMITER}${encodedRowResult}${LINE_BREAK}`;
+
     await this.storageService.appendFile({ path: dataPath, content: newRow });
+    const key = this.tableIndexService.pickKeyColumn(schema);
+    if (key) {
+      const length = Buffer.byteLength(newRow);
+      const offset = (await this.storageService.fileSize(dataPath)) - length;
+      await this.tableIndexService.addEntry(tableName, row[key.name], {
+        offset,
+        length,
+      });
+    }
   }
   async deleteRow(
     tableName: string,
@@ -163,23 +164,16 @@ export class StorageEngineService {
     });
 
     if (targets.length === 0) {
-      throw new HttpException('Row not found', 404);
+      throw new HttpException('there is no matched row', 404);
     }
 
     await this.markWasted(
       tableName,
       targets.map((target) => target.offset),
     );
-  }
-
-  matchRows(
-    rows: StoredRow[],
-    condition: Record<string, unknown>,
-  ): StoredRow[] {
-    const keys = Object.keys(condition);
-
-    return rows.filter((entry) =>
-      keys.every((key) => String(entry.row[key]) === String(condition[key])),
+    await this.removeIndexKeys(
+      tableName,
+      targets.map((t) => t.row),
     );
   }
 
@@ -206,6 +200,10 @@ export class StorageEngineService {
       targets.map((target) => target.offset),
     );
 
+    await this.removeIndexKeys(
+      tableName,
+      targets.map((t) => t.row),
+    );
     for (const row of mergedRows) {
       await this.insertRow(tableName, row);
     }
@@ -219,6 +217,28 @@ export class StorageEngineService {
     const db = this.databaseService.requireCurrentDatabase();
     const tablePath = this.pathService.getTablePath(db, tableName);
     const schema = await this.readSchema(tableName);
+
+    const keyColumn = this.tableIndexService.pickKeyColumn(schema);
+
+    if (
+      keyColumn &&
+      where?.operator === '=' &&
+      where.column === keyColumn.name
+    ) {
+      const indexed = await this.selectByIndex(
+        tableName,
+        tablePath,
+        schema,
+        keyColumn,
+        where.value,
+      );
+
+      if (indexed) {
+        return indexed.map((row) =>
+          projection?.length ? this.projectionMethod(row, projection) : row,
+        );
+      }
+    }
 
     const content = await this.storageService.readFile({
       path: tablePath,
@@ -256,14 +276,44 @@ export class StorageEngineService {
         : row;
       rows.push(projectedRow);
     }
-    // const keys = Object.keys(conditions);
 
-    // if (keys.length) {
-    //   rows = rows.filter((entry) =>
-    //     keys.every((key) => String(entry[key]) === String(conditions[key])),
-    //   );
-    // }
     return rows;
+  }
+
+  private async selectByIndex(
+    tableName: string,
+    tablePath: string,
+    schema: TableSchema,
+    keyColumn: KeyColumn,
+    value: string | number | boolean,
+  ): Promise<Row[] | null> {
+    const entry = await this.tableIndexService.lookup(tableName, value);
+    if (!entry?.length) return null;
+
+    const buffer = Buffer.alloc(entry.length);
+    const bytesRead = await this.storageService.readAt(
+      tablePath,
+      buffer,
+      entry.offset,
+    );
+    if (!bytesRead) return null;
+
+    const line = buffer.toString('utf-8', 0, bytesRead).split(LINE_BREAK)[0];
+    const fields = splitFields(line);
+
+    if (fields[0] === WASTED_FLAG) return [];
+    if (fields.length !== schema.columns.length + 1) return null;
+
+    const row = decodeRow(fields.slice(1).join(DELIMITER), schema);
+
+    const normalizedKey = this.tableIndexService.normalizeKey(value);
+    if (
+      this.tableIndexService.normalizeKey(row[keyColumn.name]) !== normalizedKey
+    ) {
+      return null;
+    }
+
+    return [row];
   }
 
   private async requireDataPath(tableName: string): Promise<string> {
@@ -327,21 +377,10 @@ export class StorageEngineService {
     await Promise.all([
       this.storageService.deleteFile(tablePath),
       this.storageService.deleteFile(schemaPath),
+      this.tableIndexService.drop(tableName),
     ]);
   }
 
-  async dropDatabase(databaseName: string) {
-    const dbPath = this.pathService.getDatabasePath(databaseName);
-    if (!(await this.storageService.exists(dbPath)))
-      throw new HttpException(`Database ${databaseName} does not exist`, 404);
-
-    if (databaseName === this.databaseService.getCurrentDatabase())
-      throw new HttpException(
-        'Cannot drop the currently connected database.',
-        400,
-      );
-    await this.storageService.deleteDirectory(dbPath);
-  }
   async retrieveSerails(tableName: string): Promise<SerialCounter[]> {
     const db = this.databaseService.requireCurrentDatabase();
     const incrementalPath = this.pathService.getIncrementalPath(db, tableName);
@@ -358,10 +397,14 @@ export class StorageEngineService {
 
     await this.storageService.writeFile(incrementalPath, JSON.stringify(data));
   }
-  // async readIncrementalfile(databaseName: string, tableName) {
-  //   const path = this.pathService.getIncrementalPath(databaseName, tableName);
-  //   const res = await this.storageService.readFile({ path });
+  private async removeIndexKeys(tableName: string, rows: Row[]): Promise<void> {
+    const schema = await this.readSchema(tableName);
+    const key = this.tableIndexService.pickKeyColumn(schema);
+    if (!key) return;
 
-  //   return res;
-  // }
+    await this.tableIndexService.removeEntries(
+      tableName,
+      rows.map((row) => row[key.name]),
+    );
+  }
 }

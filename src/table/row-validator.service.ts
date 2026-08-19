@@ -97,17 +97,4 @@ export class RowValidatoreService {
       this.validateColumnType(column, row[column.name]);
     }
   }
-  // private validateTypes(row: Row, schema: TableSchema): void {
-  //   for (const column of schema.columns) {
-  //     const value = row[column.name];
-
-  //     if (typeof value !== column.type) {
-  //       console.log(typeof value, column.type);
-  //       throw new HttpException(
-  //         `Column "${column.name}" must be of type "${column.type}".`,
-  //         400,
-  //       );
-  //     }
-  //   }
-  // }
 }

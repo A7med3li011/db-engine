@@ -14,7 +14,6 @@ export interface ColumnDefinition {
   primaryKey?: boolean;
   unique?: boolean;
   default?: any;
-  indexed?: boolean;
   autoIncrement?: boolean;
 }
 

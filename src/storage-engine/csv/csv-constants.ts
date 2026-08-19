@@ -1,5 +1,4 @@
 export const DELIMITER = ',';
-export const QUOTE = '"';
 export const LINE_BREAK = '\n';
 
 export const WASTED_COLUMN = '_wasted';

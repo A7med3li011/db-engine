@@ -7,8 +7,6 @@ import {
 import { ExecutorService } from 'src/executor/executor.service';
 import { Token, TokenType } from 'src/tokenizer/token.interface';
 
-// the only words allowed as a column type. taken from ColumnType so the two
-// lists can never say different things.
 const COLUMN_TYPES: ReadonlySet<string> = new Set<string>(
   Object.values(ColumnType),
 );
@@ -17,7 +15,6 @@ export class ParserService {
   constructor(private readonly executorService: ExecutorService) {}
   parse(tokens: Token[]) {
     const firstToken = tokens[0];
-    console.log(tokens);
 
     if (!firstToken || firstToken.type === TokenType.EOF) {
       throw new HttpException('Empty statement', 400);
@@ -75,7 +72,6 @@ export class ParserService {
     position++;
 
     const columns: string[] = [];
-
     while (true) {
       const token = tokens[position];
 
@@ -105,10 +101,7 @@ export class ParserService {
       fromToken.type !== TokenType.KEYWORD ||
       fromToken.value.toUpperCase() !== 'FROM'
     ) {
-      throw new HttpException(
-        `Expected FROM at line ${fromToken.line}, column ${fromToken.column}`,
-        400,
-      );
+      throw new HttpException(`Expected FROM after columns name`, 400);
     }
 
     position++;
@@ -116,10 +109,7 @@ export class ParserService {
     const tableToken = tokens[position];
 
     if (tableToken.type !== TokenType.IDENTIFIER) {
-      throw new HttpException(
-        `Expected table name at line ${tableToken.line}, column ${tableToken.column}`,
-        400,
-      );
+      throw new HttpException(`Expected table name after 'FROM' keyword`, 400);
     }
 
     const from = tableToken.value;
@@ -203,10 +193,7 @@ export class ParserService {
       fromToken.type !== TokenType.KEYWORD ||
       fromToken.value.toUpperCase() !== 'FROM'
     ) {
-      throw new HttpException(
-        `Expected FROM at line ${fromToken.line}, column ${fromToken.column}`,
-        400,
-      );
+      throw new HttpException(`Expected FROM 'DELETE' keyword`, 400);
     }
 
     position++;
@@ -214,10 +201,7 @@ export class ParserService {
     const tableToken = tokens[position];
 
     if (tableToken.type !== TokenType.IDENTIFIER) {
-      throw new HttpException(
-        `Expected table name at line ${tableToken.line}, column ${tableToken.column}`,
-        400,
-      );
+      throw new HttpException(`Expected table name after 'FROM' keyword`, 400);
     }
 
     const from = tableToken.value;
@@ -428,7 +412,6 @@ export class ParserService {
   private parseUpdate(tokens: Token[]) {
     let position = 0;
 
-    // UPDATE
     if (
       tokens[position].type !== TokenType.KEYWORD ||
       tokens[position].value.toUpperCase() !== 'UPDATE'
@@ -438,12 +421,11 @@ export class ParserService {
 
     position++;
 
-    // table name
     const tableToken = tokens[position];
 
     if (tableToken.type !== TokenType.IDENTIFIER) {
       throw new HttpException(
-        `Expected table name at line ${tableToken.line}, column ${tableToken.column}`,
+        `Expected table name after 'update' keyword "`,
         400,
       );
     }
@@ -451,26 +433,20 @@ export class ParserService {
     const table = tableToken.value;
     position++;
 
-    // SET
     const setToken = tokens[position];
 
     if (
       setToken.type !== TokenType.KEYWORD ||
       setToken.value.toUpperCase() !== 'SET'
     ) {
-      throw new HttpException(
-        `Expected SET at line ${setToken.line}, column ${setToken.column}`,
-        400,
-      );
+      throw new HttpException(`Expected SET after ${table}`, 400);
     }
 
     position++;
 
-    // updates
     const updates: Record<string, string | number | boolean | null> = {};
 
     while (true) {
-      // column name
       const columnToken = tokens[position];
 
       if (columnToken.type !== TokenType.IDENTIFIER) {
@@ -480,7 +456,6 @@ export class ParserService {
       const column = columnToken.value;
       position++;
 
-      // =
       const operatorToken = tokens[position];
 
       if (
@@ -492,7 +467,6 @@ export class ParserService {
 
       position++;
 
-      // value
       const valueToken = tokens[position];
       const value = this.parseValue(valueToken);
 
@@ -500,7 +474,6 @@ export class ParserService {
 
       position++;
 
-      // comma -> another update
       if (
         tokens[position].type === TokenType.PUNCTUATION &&
         tokens[position].value === ','
@@ -512,7 +485,7 @@ export class ParserService {
       break;
     }
 
-    // WHERE
+ 
     let where: {
       column: string;
       operator: string;
@@ -555,12 +528,10 @@ export class ParserService {
       };
     }
 
-    // prevent UPDATE without WHERE
     if (!where) {
       throw new HttpException(`UPDATE requires a WHERE condition`, 400);
     }
 
-    // must be EOF
     if (tokens[position].type !== TokenType.EOF) {
       throw new HttpException(
         `Unexpected token "${tokens[position].value}"`,
@@ -617,10 +588,6 @@ export class ParserService {
     };
 
     const word = () => tokens[position].value.toUpperCase();
-    const found = () =>
-      tokens[position].type === TokenType.EOF
-        ? 'end of query'
-        : `"${tokens[position].value}"`;
 
     if (tokens[position].type !== TokenType.KEYWORD || word() !== 'CREATE')
       throw new HttpException("expected 'CREATE' as keyword", 400);
@@ -628,12 +595,12 @@ export class ParserService {
     position++;
 
     if (tokens[position].type !== TokenType.KEYWORD || word() !== 'TABLE')
-      throw new HttpException("expected 'TABLE' as keyword after CREATE", 400);
+      throw new HttpException("expected TABLE  after 'CREATE' keyword", 400);
 
     position++;
 
     if (tokens[position].type !== TokenType.IDENTIFIER)
-      throw new HttpException('expected table name after TABLE', 400);
+      throw new HttpException(`expected table name after 'TABLE' keyword`, 400);
 
     obj.tableName = tokens[position].value;
     position++;
@@ -642,10 +609,7 @@ export class ParserService {
       tokens[position].type !== TokenType.PUNCTUATION ||
       tokens[position].value !== '('
     )
-      throw new HttpException(
-        `expected '(' after ${obj.tableName} but found ${found()}`,
-        400,
-      );
+      throw new HttpException(`expected '(' after ${obj.tableName}`, 400);
 
     position++;
 
@@ -662,18 +626,12 @@ export class ParserService {
           tokens[position].type !== TokenType.PUNCTUATION ||
           tokens[position].value !== ','
         )
-          throw new HttpException(
-            `expected ',' or ')' but found ${found()}`,
-            400,
-          );
+          throw new HttpException(`expected ',' or ')' `, 400);
         position++;
       }
 
       if (tokens[position].type !== TokenType.IDENTIFIER)
-        throw new HttpException(
-          `expected a column name but found ${found()}`,
-          400,
-        );
+        throw new HttpException(`expected a column name after '('`, 400);
 
       const name = tokens[position].value;
       position++;
@@ -682,12 +640,7 @@ export class ParserService {
         tokens[position].type !== TokenType.KEYWORD ||
         !COLUMN_TYPES.has(word())
       )
-        throw new HttpException(
-          `expected a type for column "${name}" but found ${found()}. allowed types: ${Object.values(
-            ColumnType,
-          ).join(', ')}`,
-          400,
-        );
+        throw new HttpException(`expected a type for column "${name}"`, 400);
 
       const column: ColumnDefinition = {
         name,
@@ -711,7 +664,7 @@ export class ParserService {
 
         if (tokens[position].type !== TokenType.NUMBER)
           throw new HttpException(
-            `expected a number inside VARCHAR( ) for column "${name}" but found ${found()}`,
+            `expected a number inside VARCHAR( ) for column "${name}"`,
             400,
           );
 
@@ -726,7 +679,7 @@ export class ParserService {
 
         if (tokens[position].value !== ')')
           throw new HttpException(
-            `expected ')' after VARCHAR(${column.length} but found ${found()}`,
+            `expected ')' after VARCHAR(${column.length} `,
             400,
           );
 
@@ -737,10 +690,7 @@ export class ParserService {
         if (word() === 'PRIMARY') {
           position++;
           if (word() !== 'KEY')
-            throw new HttpException(
-              `expected 'KEY' after 'PRIMARY' but found ${found()}`,
-              400,
-            );
+            throw new HttpException(`expected 'KEY' after 'PRIMARY' `, 400);
           position++;
           column.primaryKey = true;
           column.nullable = false;
@@ -751,7 +701,7 @@ export class ParserService {
           position++;
           if (word() !== 'NULL')
             throw new HttpException(
-              `expected 'NULL' after 'NOT' but found ${found()}`,
+              `expected 'NULL' after 'not' keyword `,
               400,
             );
           position++;
@@ -767,7 +717,7 @@ export class ParserService {
           else if (word() === 'NULL') column.default = null;
           else
             throw new HttpException(
-              `bad DEFAULT value for column "${name}": ${found()}`,
+              `unkonwn DEFAULT value for column "${name}"`,
               400,
             );
           position++;
@@ -777,10 +727,7 @@ export class ParserService {
       }
 
       if (tokens[position].value !== ',' && tokens[position].value !== ')')
-        throw new HttpException(
-          `unexpected ${found()} after column "${name}"`,
-          400,
-        );
+        throw new HttpException(`unexpected  after column "${name}"`, 400);
 
       obj.columns.push(column);
     }

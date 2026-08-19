@@ -27,7 +27,6 @@ export class ValidationService {
 
   validateAutoIncrement(row: Row, schema: TableSchema): void {
     for (const column of schema.columns) {
-      console.log(column, column.autoIncrement, 'cnncncncncn');
       if (!column.autoIncrement) continue;
 
       if (column.name in row) {

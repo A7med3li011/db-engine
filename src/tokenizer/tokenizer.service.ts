@@ -12,7 +12,7 @@ export class TokenizerService {
     let column = 1;
 
     while (i < sql.length) {
-      // Whitespace
+
       if (/\s/.test(sql[i])) {
         if (sql[i] === '\n') {
           line++;
@@ -27,6 +27,7 @@ export class TokenizerService {
 
       // Comment
       if (sql[i] === '-' && sql[i + 1] === '-') {
+
         while (i < sql.length && sql[i] !== '\n') {
           i++;
           column++;
@@ -100,6 +101,7 @@ export class TokenizerService {
         column++;
 
         while (i < sql.length) {
+
           if (sql[i] === "'") {
             if (sql[i + 1] === "'") {
               i += 2;
@@ -142,7 +144,7 @@ export class TokenizerService {
         continue;
       }
 
-      // Two-character operators
+      
       const twoCharOperator = sql.slice(i, i + 2);
 
       if (['>=', '<=', '!=', '<>'].includes(twoCharOperator)) {
@@ -160,7 +162,7 @@ export class TokenizerService {
         continue;
       }
 
-      // One-character operators
+     
       if (['=', '>', '<'].includes(sql[i])) {
         tokens.push({
           type: TokenType.OPERATOR,
@@ -176,7 +178,7 @@ export class TokenizerService {
         continue;
       }
 
-      // Punctuation
+      // Pnuctuation
       if (['(', ')', ',', ';', '*', '.'].includes(sql[i])) {
         tokens.push({
           type: TokenType.PUNCTUATION,

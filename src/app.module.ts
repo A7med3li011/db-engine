@@ -1,6 +1,4 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { DatabaseModule } from './database/database.module';
 import { StorageModule } from './storage/storage.module';
 import { TableModule } from './table/table.module';
@@ -21,7 +19,5 @@ import { SqlizerModule } from './sqlizer/sqlizer.module';
     ExecutorModule,
     SqlizerModule
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}

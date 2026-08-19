@@ -25,4 +25,7 @@ export class PathService {
   getTablePath(databaseName: string, tableName: string): string {
     return path.join(this.getDatabasePath(databaseName), `${tableName}.csv`);
   }
+  getIndexPath(databaseName: string, table: string): string {
+    return path.join(this.getDatabasePath(databaseName), `${table}.info.json`);
+  }
 }

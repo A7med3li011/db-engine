@@ -5,9 +5,10 @@
       "name": "id",
       "type": "INTEGER",
       "nullable": false,
-      "autoIncrement": true
+      "autoIncrement": true,
+      "primaryKey": true
     },
-    { "name": "title", "type": "VARCHAR", "nullable": true, "length": 20 },
-    { "name": "price", "type": "INTEGER", "nullable": true }
+    { "name": "price", "type": "INTEGER", "nullable": true },
+    { "name": "title", "type": "VARCHAR", "nullable": true }
   ]
 }

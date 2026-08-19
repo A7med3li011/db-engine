@@ -46,7 +46,7 @@ export class SchemaValidatoreService {
     for (const column of schema.columns) {
       if (!allowed.has(column.type)) {
         throw new HttpException(
-          `Unsupported type "${column.type}". Allowed types: ${[...allowed].join(', ')}.`,
+          `Unsupported type "${column.type}"`,
           400,
         );
       }
