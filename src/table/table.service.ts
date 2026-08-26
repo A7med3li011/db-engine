@@ -10,6 +10,7 @@ import { StorageEngineService } from 'src/storage-engine/storage-engine.service'
 import { StoredRow } from 'src/storage-engine/csv/stored-row-interface';
 import { ValidationService } from './validation.service';
 import { LockService } from 'src/shared/lock.service';
+import { handleResponse } from 'src/shared/responseobject';
 @Injectable()
 export class TableService {
   constructor(
@@ -86,6 +87,8 @@ export class TableService {
         where,
       );
 
+      handleResponse(200, `data retreived successfully`, rows);
+
       return rows;
     });
   }
@@ -95,6 +98,7 @@ export class TableService {
     where: WhereClause | null | undefined,
     updates: Record<string, unknown>,
   ): Promise<void> {
+    console.log(updates, 'updates');
     return this.lockService.runExclusive(tableName, async () => {
       if (Object.keys(updates).length === 0) {
         throw new HttpException('There are no values for updates', 400);

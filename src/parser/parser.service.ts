@@ -57,6 +57,8 @@ export class ParserService {
       throw new HttpException(`Unexpected token "${firstToken.value}"`, 400);
     }
 
+    console.log(obj, 'parser');
+
     return this.executorService.executeDDL(obj);
   }
   private parseSelect(tokens: Token[]) {
@@ -485,7 +487,6 @@ export class ParserService {
       break;
     }
 
- 
     let where: {
       column: string;
       operator: string;
@@ -621,6 +622,7 @@ export class ParserService {
         position++;
         break;
       }
+
       if (obj.columns.length > 0) {
         if (
           tokens[position].type !== TokenType.PUNCTUATION ||

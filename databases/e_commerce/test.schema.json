@@ -1,5 +1,5 @@
 {
-  "name": "product",
+  "name": "test",
   "columns": [
     {
       "name": "id",
@@ -8,7 +8,6 @@
       "autoIncrement": true,
       "primaryKey": true
     },
-    { "name": "price", "type": "INTEGER", "nullable": true },
     { "name": "title", "type": "VARCHAR", "nullable": true }
   ]
 }

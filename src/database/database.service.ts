@@ -4,6 +4,7 @@ import * as path from 'path';
 import { DatabaseMetadata } from './interfaces/database.metadata.interface';
 import { StorageService } from '../storage/storage.service';
 import { PathService } from 'src/shared/path.service';
+import { handleResponse } from 'src/shared/responseobject';
 
 @Injectable()
 export class DatabaseService {
@@ -39,6 +40,7 @@ export class DatabaseService {
 
     await this.storageService.createDirectory(dataBasePath);
     await this.createMetaData(name, dataBasePath);
+    handleResponse(201, `${name} created successfully`, undefined);
   }
 
   async connect(name: string) {
@@ -68,5 +70,6 @@ export class DatabaseService {
         400,
       );
     await this.storageService.deleteDirectory(this.getDatabasePath(name));
+    handleResponse(200, `${name} deleted successfully`, undefined);
   }
 }

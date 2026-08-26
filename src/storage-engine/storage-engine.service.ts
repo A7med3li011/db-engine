@@ -24,6 +24,7 @@ import {
 import { StoredRow } from './csv/stored-row-interface';
 import { TableIndexService } from './index/table-index.service';
 import { KeyColumn } from './index/table-index.interface';
+import { handleResponse } from 'src/shared/responseobject';
 
 @Injectable()
 export class StorageEngineService {
@@ -124,6 +125,7 @@ export class StorageEngineService {
 
       throw new HttpException(`Failed to create table ${dto.name}`, 500);
     }
+    handleResponse(201, `${dto.name} create successfully`, undefined);
   }
 
   async insertRow(tableName: string, row: Row): Promise<void> {
@@ -144,6 +146,7 @@ export class StorageEngineService {
         length,
       });
     }
+    handleResponse(201, `row inserted successfully`, row);
   }
   async deleteRow(
     tableName: string,
@@ -175,6 +178,7 @@ export class StorageEngineService {
       tableName,
       targets.map((t) => t.row),
     );
+    handleResponse(200, `row deleted successfully`, undefined);
   }
 
   async markWasted(tableName: string, offsets: number[]): Promise<void> {
@@ -207,6 +211,7 @@ export class StorageEngineService {
     for (const row of mergedRows) {
       await this.insertRow(tableName, row);
     }
+    handleResponse(200, `row updated successfully`, mergedRows);
   }
 
   async select(
@@ -379,6 +384,7 @@ export class StorageEngineService {
       this.storageService.deleteFile(schemaPath),
       this.tableIndexService.drop(tableName),
     ]);
+    handleResponse(200, `${tableName} droped successfully`, undefined);
   }
 
   async retrieveSerails(tableName: string): Promise<SerialCounter[]> {
