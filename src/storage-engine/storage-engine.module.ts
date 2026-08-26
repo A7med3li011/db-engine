@@ -4,11 +4,12 @@ import { SharedModule } from 'src/shared/shared.module';
 import { StorageModule } from 'src/storage/storage.module';
 import { DatabaseModule } from 'src/database/database.module';
 import { StorageEngineController } from './storag-engine.controller';
+import { TableIndexService } from './index/table-index.service';
 
 @Module({
   imports: [DatabaseModule, StorageModule, SharedModule],
   controllers: [StorageEngineController],
-  providers: [StorageEngineService],
+  providers: [StorageEngineService, TableIndexService],
   exports: [StorageEngineService],
 })
 export class StorageEngineModule {}

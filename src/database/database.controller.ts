@@ -9,12 +9,15 @@ export class DatabaseController {
   @Post()
   async createDatabase(@Body() payload: CreateDatabaseDto) {
     await this.databaseService.create(payload.name);
-    return { message: `Database ${payload.name} created successfully.` };
   }
 
   @Post(':name/connect')
   async connectDatabase(@Param('name') name: string) {
     await this.databaseService.connect(name);
+    return {
+      statusCode: 200,
+      message: 'database connected successfully',
+    };
   }
 
   @Delete(':name')

@@ -1,0 +1,13 @@
+{
+  "name": "test",
+  "columns": [
+    {
+      "name": "id",
+      "type": "INTEGER",
+      "nullable": false,
+      "autoIncrement": true,
+      "primaryKey": true
+    },
+    { "name": "title", "type": "VARCHAR", "nullable": true }
+  ]
+}

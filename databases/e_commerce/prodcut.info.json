@@ -1,0 +1,6 @@
+{
+  "table": "prodcut",
+  "keyColumn": "id",
+  "source": "PRIMARY_KEY",
+  "entries": {}
+}

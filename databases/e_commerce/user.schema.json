@@ -1,0 +1,1 @@
+{"name":"user","columns":[{"name":"id","type":"INTEGER","nullable":false,"primaryKey":true},{"name":"title","type":"VARCHAR","nullable":true,"length":10,"unique":true}]}

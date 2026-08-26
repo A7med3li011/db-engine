@@ -1,5 +1,10 @@
 import { HttpException, Injectable } from '@nestjs/common';
-import { Row, TableSchema } from './interfaces/table-schema.interface';
+import {
+  ColumnDefinition,
+  ColumnType,
+  Row,
+  TableSchema,
+} from './interfaces/table-schema.interface';
 
 @Injectable()
 export class RowValidatoreService {
@@ -14,7 +19,7 @@ export class RowValidatoreService {
   private validateRequiredColumns(row: Row, schema: TableSchema): void {
     for (const column of schema.columns) {
       if (!(column.name in row)) {
-        if (column.default != null) {
+        if (column.default != null || column.autoIncrement) {
           continue;
         }
         throw new HttpException(`Missing column "${column.name}".`, 400);
@@ -30,18 +35,66 @@ export class RowValidatoreService {
       }
     }
   }
+  private validateColumnType(column: ColumnDefinition, value: unknown): void {
+    if (column.autoIncrement) return;
+    switch (column.type) {
+      case ColumnType.INTEGER:
+        if (!Number.isInteger(value)) {
+          throw new HttpException(
+            `Column "${column.name}" must be an INTEGER.`,
+            400,
+          );
+        }
+        break;
+
+      case ColumnType.BOOLEAN:
+        if (typeof value !== 'boolean') {
+          throw new HttpException(
+            `Column "${column.name}" must be a BOOLEAN.`,
+            400,
+          );
+        }
+        break;
+
+      case ColumnType.VARCHAR:
+        if (typeof value !== 'string') {
+          throw new HttpException(
+            `Column "${column.name}" must be a VARCHAR.`,
+            400,
+          );
+        }
+
+        if (column.length && value.length > column.length) {
+          throw new HttpException(
+            `Column "${column.name}" exceeds VARCHAR(${column.length}).`,
+            400,
+          );
+        }
+
+        break;
+
+      case ColumnType.TEXT:
+        if (typeof value !== 'string') {
+          throw new HttpException(`Column "${column.name}" must be TEXT.`, 400);
+        }
+
+        break;
+
+      case ColumnType.TIMESTAMP:
+        if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) {
+          throw new HttpException(
+            `Column "${column.name}" must be a valid TIMESTAMP.`,
+            400,
+          );
+        }
+
+        break;
+    }
+  }
 
   private validateTypes(row: Row, schema: TableSchema): void {
     for (const column of schema.columns) {
-      const value = row[column.name];
-
-      if (typeof value !== column.type) {
-        console.log(typeof value, column.type);
-        throw new HttpException(
-          `Column "${column.name}" must be of type "${column.type}".`,
-          400,
-        );
-      }
+      this.validateColumnType(column, row[column.name]);
     }
   }
 }

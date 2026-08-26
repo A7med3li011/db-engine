@@ -11,9 +11,21 @@ export class PathService {
     return path.join(this.getDatabaseRoot(), databaseName);
   }
   getSchemaPath(databaseName: string, table: string): string {
-    return path.join(this.getDatabasePath(databaseName), `${table}.schema.json`);
+    return path.join(
+      this.getDatabasePath(databaseName),
+      `${table}.schema.json`,
+    );
+  }
+  getIncrementalPath(databaseName: string, table: string): string {
+    return path.join(
+      this.getDatabasePath(databaseName),
+      `${table}.incremental.json`,
+    );
   }
   getTablePath(databaseName: string, tableName: string): string {
-    return path.join(this.getDatabasePath(databaseName), `${tableName}.ndjson`);
+    return path.join(this.getDatabasePath(databaseName), `${tableName}.csv`);
+  }
+  getIndexPath(databaseName: string, table: string): string {
+    return path.join(this.getDatabasePath(databaseName), `${table}.info.json`);
   }
 }

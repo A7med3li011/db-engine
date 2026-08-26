@@ -1,98 +1,249 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# db-engine
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A small SQL database engine written in NestJS. It tokenizes SQL text, parses it into an AST, and
+executes it against CSV files on disk under `databases/`.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+This README covers the **SQL endpoints** (`/sql/*`) — the two routes you send raw SQL to.
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## Running
 
 ```bash
-$ npm install
+npm install
+npm run start:dev     # watch mode
+npm run start:prod    # after npm run build
 ```
 
-## Compile and run the project
+The server listens on `http://localhost:3000` (override with the `PORT` env var).
+Every route is prefixed with `api/v1`, so the base URL is:
+
+```
+http://localhost:3000/api/v1
+```
+
+---
+
+## Endpoints
+
+Both endpoints take the same body — a single SQL statement as a string:
+
+```json
+{ "statement": "SELECT * FROM product" }
+```
+
+| Method | Path          | Accepts                                  |
+| ------ | ------------- | ---------------------------------------- |
+| `POST` | `/sql/ddl`    | `CREATE` and `DROP` statements only       |
+| `POST` | `/sql/dml`    | `SELECT`, `INSERT`, `UPDATE`, `DELETE`    |
+
+The split is enforced on the first keyword. Sending a `SELECT` to `/sql/ddl` returns
+`400 this method for DDL only`, and sending a `CREATE` to `/sql/dml` returns
+`400 this method for DML only`.
+
+Every successful response is wrapped in the same envelope:
+
+```json
+{
+  "statusCode": 200,
+  "message": "2 row(s) selected",
+  "data": [{ "id": 1, "title": "laptop" }]
+}
+```
+
+`data` is the result of the statement — an array of rows for `SELECT`, and a small object naming
+what was touched for everything else. `statusCode` matches the HTTP status, and it varies with the
+statement: **201** for `CREATE` and `INSERT`, **200** for everything else.
+
+---
+
+## Before you run any statement: connect
+
+Tables live inside a database, and the engine keeps the "current database" **in memory**. Until you
+connect, every table statement fails with:
+
+```json
+{ "statusCode": 400, "message": "No database is currently connected." }
+```
+
+There is no SQL for this — connecting is a separate route:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+curl -X POST http://localhost:3000/api/v1/database/shop/connect
 ```
 
-## Run tests
+Because the connection is held in memory, **it is lost every time the server restarts**. After a
+restart, connect again before sending SQL.
+
+---
+
+## Usage examples
+
+All examples assume `BASE=http://localhost:3000/api/v1`.
+
+### 1. Create a database and connect to it
 
 ```bash
-# unit tests
-$ npm run test
+curl -X POST $BASE/sql/ddl \
+  -H 'Content-Type: application/json' \
+  -d '{"statement":"CREATE DATABASE shop"}'
+# → 201 {"statusCode":201,"message":"Database shop created successfully",
+#            "data":{"database":"shop"}}
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+curl -X POST $BASE/database/shop/connect
+# → 200 {"statusCode":200,"message":"Connected to database shop",
+#            "data":{"database":"shop"}}
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### 2. Create a table
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+curl -X POST $BASE/sql/ddl \
+  -H 'Content-Type: application/json' \
+  -d '{"statement":"CREATE TABLE product (id SERIAL PRIMARY KEY, title VARCHAR(50) NOT NULL, price INTEGER DEFAULT 0, active BOOLEAN DEFAULT TRUE)"}'
+# → 201 {"statusCode":201,"message":"Table product created successfully",
+#            "data":{"table":"product"}}
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### 3. Insert rows
 
-## Resources
+```bash
+curl -X POST $BASE/sql/dml \
+  -H 'Content-Type: application/json' \
+  -d "{\"statement\":\"INSERT INTO product (title, price) VALUES ('laptop', 1500)\"}"
+# → 201 {"statusCode":201,"message":"Row inserted into product successfully",
+#            "data":{"table":"product"}}
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+`id` is omitted — `SERIAL` fills it in automatically.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+### 4. Select
 
-## Support
+```bash
+curl -X POST $BASE/sql/dml \
+  -H 'Content-Type: application/json' \
+  -d '{"statement":"SELECT * FROM product"}'
+# → 200 {"statusCode":200,"message":"2 row(s) selected",
+#            "data":[{"id":1,"title":"laptop","price":1500,"active":true},
+#                    {"id":2,"title":"mouse","price":25,"active":true}]}
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+With a projection and a condition:
 
-## Stay in touch
+```bash
+curl -X POST $BASE/sql/dml \
+  -H 'Content-Type: application/json' \
+  -d '{"statement":"SELECT title, price FROM product WHERE id = 1"}'
+# → 200 {"statusCode":200,"message":"1 row(s) selected",
+#            "data":[{"title":"laptop","price":1500}]}
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+### 5. Update and delete
 
-## License
+```bash
+curl -X POST $BASE/sql/dml \
+  -H 'Content-Type: application/json' \
+  -d '{"statement":"UPDATE product SET price = 1400 WHERE id = 1"}'
+# → 200 {"statusCode":200,"message":"Rows in product updated successfully",
+#            "data":{"table":"product"}}
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+curl -X POST $BASE/sql/dml \
+  -H 'Content-Type: application/json' \
+  -d '{"statement":"DELETE FROM product WHERE id = 2"}'
+# → 200 {"statusCode":200,"message":"Rows deleted from product successfully",
+#            "data":{"table":"product"}}
+```
+
+`UPDATE` and `DELETE` **require** a `WHERE` clause — this is a deliberate guard against wiping a
+table by accident.
+
+### 6. Drop
+
+```bash
+curl -X POST $BASE/sql/ddl \
+  -H 'Content-Type: application/json' \
+  -d '{"statement":"DROP TABLE product"}'
+# → 200 {"statusCode":200,"message":"Table product dropped successfully",
+#            "data":{"table":"product"}}
+```
+
+`DROP DATABASE shop` works the same way, but not while you are connected to it — disconnect by
+connecting elsewhere first.
+
+---
+
+## Supported SQL
+
+### DDL — `POST /sql/ddl`
+
+```sql
+CREATE DATABASE <name>
+CREATE TABLE <name> (<column> <type> [constraints], ...)
+DROP DATABASE <name>
+DROP TABLE <name>
+```
+
+**Column types:** `INTEGER`, `VARCHAR(n)`, `TEXT`, `BOOLEAN`, `TIMESTAMP`, `SERIAL`
+
+`SERIAL` is shorthand for an auto-incrementing, non-nullable `INTEGER`.
+
+**Column constraints:** `PRIMARY KEY`, `UNIQUE`, `NOT NULL`, `DEFAULT <value>`
+
+A table may have at most one `PRIMARY KEY`.
+
+### DML — `POST /sql/dml`
+
+```sql
+SELECT <* | col, col> FROM <table> [WHERE <col> <op> <value>]
+INSERT INTO <table> (<col>, ...) VALUES (<value>, ...)
+UPDATE <table> SET <col> = <value>[, ...] WHERE <col> <op> <value>
+DELETE FROM <table> WHERE <col> <op> <value>
+```
+
+**Comparison operators:** `=`, `>`, `<`, `>=`, `<=`, `!=`, `<>`
+
+### Syntax notes
+
+- Keywords are case-insensitive (`select` and `SELECT` both work); table and column names are not.
+- String literals use single quotes: `'laptop'`. A doubled `''` is accepted by the tokenizer, but
+  it is currently stored verbatim — `'it''s'` comes back as `it''s`, not `it's`.
+- `--` starts a comment that runs to the end of the line.
+- Literals may be numbers (including negatives), `TRUE` / `FALSE`, or `NULL`.
+
+### Not supported yet
+
+One statement per request. `WHERE` takes a single condition — `AND` / `OR` are tokenized but not
+parsed. There are no joins, no `ORDER BY`, `GROUP BY`, or `LIMIT`, and no aggregate functions.
+
+---
+
+## Errors
+
+Failures return a consistent shape:
+
+```json
+{
+  "statusCode": 400,
+  "message": "UPDATE requires a WHERE condition",
+  "data": null,
+  "timestamp": "2026-08-19T09:46:55.373Z",
+  "path": "/api/v1/sql/dml"
+}
+```
+
+Common ones:
+
+| Status | Message                                                  | Cause                                    |
+| ------ | -------------------------------------------------------- | ---------------------------------------- |
+| 400    | `No database is currently connected.`                     | You skipped the connect step             |
+| 400    | `this method for DDL only`                                | Non-`CREATE`/`DROP` sent to `/sql/ddl`   |
+| 400    | `this method for DML only`                                | `CREATE`/`DROP` sent to `/sql/dml`       |
+| 400    | `statement can't be empty`                                | Empty or missing `statement`             |
+| 400    | `UPDATE requires a WHERE condition`                       | `UPDATE` with no `WHERE`                 |
+| 400    | `we prevent deleting without condition ...`               | `DELETE` with no `WHERE`                 |
+| 400    | `Expected column name at line 1, column 8`                | Parse error — includes line and column   |
+| 400    | `Unterminated string at line 1, column 37`                | Unclosed `'` literal                     |
+| 400    | `table "t2" can have only one PRIMARY KEY`                | More than one `PRIMARY KEY`              |
+| 400    | `Cannot drop the currently connected database.`           | `DROP DATABASE` on the active database   |
+| 404    | `Schema ghost does not exist`                             | Unknown table                            |
+| 409    | `Database shop already exists`                            | `CREATE DATABASE` with a name in use     |

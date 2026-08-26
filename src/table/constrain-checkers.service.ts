@@ -5,25 +5,35 @@ import { Row, TableSchema } from './interfaces/table-schema.interface';
 export class ConstrainCheckerService {
   constructor() {}
 
-  validate(row: Row, allRows: Row[], schema: TableSchema): void {
-    this.fillDefault(row, schema);
-    this.validatePrimaryKey(row, allRows,schema);
-    this.validateuniqueness(row, allRows,schema);
+  validate(
+    row: Row,
+    allRows: Row[],
+    schema: TableSchema,
+    ignoredIndex?: number,
+  ): void {
+    this.validatePrimaryKey(row, allRows, schema, ignoredIndex);
+    this.validateuniqueness(row, allRows, schema, ignoredIndex);
   }
 
   private validatePrimaryKey(
     row: Row,
     allRows: Row[],
     schema: TableSchema,
+    ignoredIndex?: number,
   ): void {
-    const primaryKey = schema.columns.find((el) => el.primaryKey)?.name;
+    const primaryRow = schema.columns.find((el) => el.primaryKey);
+    const primaryKey = primaryRow?.name;
     if (!primaryKey) return;
-    if (row[primaryKey] == null || row[primaryKey] == undefined)
+    if (primaryRow.autoIncrement) return;
+    if (row[primaryKey] == null)
       throw new HttpException("primary key can't be nullable", 400);
 
     if (
       allRows.length &&
-      allRows.some((el) => el[primaryKey] == row[primaryKey])
+      allRows.some(
+        (el, index) =>
+          el[primaryKey] == row[primaryKey] && index != ignoredIndex,
+      )
     )
       throw new HttpException(
         `Duplicate primary key "${row[primaryKey] as string}".`,
@@ -34,6 +44,7 @@ export class ConstrainCheckerService {
     row: Row,
     allRows: Row[],
     schema: TableSchema,
+    ignoredIndex?: number,
   ): void {
     const uniquenessKeys = schema.columns
       .filter((el) => el.unique)
@@ -41,12 +52,16 @@ export class ConstrainCheckerService {
     if (!uniquenessKeys.length) return;
 
     for (const key of uniquenessKeys) {
-      if (allRows.some((ele) => ele[key] === row[key])) {
+      if (
+        allRows.some(
+          (ele, index) => ele[key] === row[key] && index != ignoredIndex,
+        )
+      ) {
         throw new HttpException(`key:${key} is duplicated must be unique`, 409);
       }
     }
   }
-  private fillDefault(row: Row, schema: TableSchema): void {
+  applyDefaults(row: Row, schema: TableSchema): void {
     const defaultKeys = schema.columns.filter((el) => el.default != null);
 
     if (!defaultKeys.length) return;

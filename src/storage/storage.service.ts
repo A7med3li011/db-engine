@@ -6,6 +6,8 @@ import {
   mkdir,
   appendFile as fsAppendFile,
   readFile,
+  open,
+  stat,
 } from 'fs/promises';
 import { AppendFileOptions } from './interfaces/append-file.interface';
 
@@ -49,13 +51,44 @@ export class StorageService {
   }): Promise<string> {
     return await readFile(options.path, options.encoding ?? 'utf-8');
   }
-  async createFile(path: string): Promise<void> {
+  async createFile(path: string, payload?: string): Promise<void> {
     if (await this.exists(path)) {
       throw new HttpException('File already exists.', 409);
     }
-    await this.writeFile(path, '');
+    await this.writeFile(path, payload ? payload : '');
   }
   async deleteFile(path: string): Promise<void> {
     await rm(path, { force: true });
+  }
+
+  async readAt(path: string, buffer: Buffer, position: number) {
+    const handle = await open(path, 'r');
+    try {
+      const { bytesRead } = await handle.read(
+        buffer,
+        0,
+        buffer.length,
+        position,
+      );
+      return bytesRead;
+    } finally {
+      await handle.close();
+    }
+  }
+  async writeAt(path: string, buffer: Buffer, position: number): Promise<void> {
+    const handle = await open(path, 'r+');
+    try {
+      await handle.write(buffer, 0, buffer.length, position);
+    } finally {
+      await handle.close();
+    }
+  }
+  async fileSize(path: string): Promise<number> {
+    const info = await stat(path);
+    return info.size;
+  }
+
+  async readBuffer(path: string): Promise<Buffer> {
+    return readFile(path);
   }
 }
